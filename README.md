@@ -4,7 +4,7 @@ This repo include my personal notes taken when I was learning OS in HIT(Weihai) 
 
 Currently the language is only avaible in Chinese, while some of the content is English. I also notice that some of the topics is not completed. Things will be updated continously. Thanks for your views and stars!
 
-**update on Feb. 2**
+**update in Feb. 2**
 
 add IO_multiplexing topics to repo, the content should be fully completed by the end of this weekend.
 
