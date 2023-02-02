@@ -6,7 +6,7 @@
 
 ## 基于TCP Protocol的Socket通信流程
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\image-20230131210852179.png" alt="image-20230131210852179" style="zoom:67%;" />
+<img src="/md_image/process_of_socket.png" style="zoom:67%;" />
 
 
 
