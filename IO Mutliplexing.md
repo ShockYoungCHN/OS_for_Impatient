@@ -143,7 +143,7 @@ extern int close (int __fd);
 
 **异步IO Model(AIO)：**
 
-<img src="\md_image\image-20230202204213360.png" alt="image-20230202204213360" style="zoom:67%;" />
+<img src=".\md_image\image-20230202204213360.png" alt="image-20230202204213360" style="zoom:67%;" />
 
 another picture describe AIO：
 
