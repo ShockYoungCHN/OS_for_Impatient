@@ -6,7 +6,7 @@
 
 ## 基于TCP Protocol的Socket通信流程
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\process_of_socket.png" style="zoom:67%;" />
+<img src="\md_images\process_of_socket.png" style="zoom:67%;" />
 
 
 
@@ -143,7 +143,7 @@ extern int close (int __fd);
 
 **异步IO Model(AIO)：**
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\image-20230202204213360.png" alt="image-20230202204213360" style="zoom:67%;" />
+<img src="\md_images\image-20230202204213360.png" alt="image-20230202204213360" style="zoom:67%;" />
 
 another picture describe AIO：
 
@@ -168,7 +168,7 @@ IO复用一定是阻塞的，
 
 
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\image-20230202220714438.png" alt="image-20230202220714438" style="zoom: 67%;" />
+<img src="\md_images\image-20230202220714438.png" alt="image-20230202220714438" style="zoom: 67%;" />
 
 ## 阻塞与非阻塞
 
@@ -188,7 +188,7 @@ IO复用一定是阻塞的，
 
 在内核中no data ready的情况下调用read函数，read函数会一直等待，直到内核中data ready，然后拷贝到用户区。这种做法的缺点显而易见，如果一直没有data的话，进程会在原地等待，无法做其他事情。
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\image-20230202202516674.png" alt="image-20230202202516674" style="zoom:67%;" />
+<img src="\md_images\image-20230202202516674.png" alt="image-20230202202516674" style="zoom:67%;" />
 
 
 
@@ -196,7 +196,7 @@ IO复用一定是阻塞的，
 
 每次在内核中no data ready的情况下调用read函数，都会直接返回EWOULDBLOCK，但是在内核中data ready后，就会花费一段时间，把data从内核区中拷贝到用户区。
 
-<img src="C:\Users\Young\AppData\Roaming\Typora\typora-user-images\image-20230202202440760.png" alt="image-20230202202440760" style="zoom:67%;" />
+<img src="\md_images\image-20230202202440760.png" alt="image-20230202202440760" style="zoom:67%;" />
 
 
 
