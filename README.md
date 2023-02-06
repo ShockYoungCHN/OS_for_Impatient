@@ -7,6 +7,6 @@ Currently the language is only avaible in Chinese, while some of the content is 
 
 **update in Feb. 5**
 
-Most of the content in "IO_multiplexing" is finised. Code demo to be uploaded.
+Most of the content in "IO_multiplexing" is finished. Code demo to be uploaded.
 
 Ref Repo: [Osteps](https://github.com/remzi-arpacidusseau/ostep-translations) Forget the OS stuff you are reading now, You should definitely read this one!
