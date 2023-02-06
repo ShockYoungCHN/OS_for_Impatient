@@ -453,7 +453,7 @@ struct epoll_event {
 
 ##### epoll_wait()
 
-`epoll_wait` is similar to `select`, The epoll_wait() system call waits for events happened in fds in the interesting list.
+`epoll_wait()` is similar to the function of `select()`, The epoll_wait() system call waits for events happened in fds in the interesting list.
 
 ```c
 /*
