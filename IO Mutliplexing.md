@@ -2,7 +2,7 @@
 
 ## 前言
 
-在面试中经常出现IO复用的问题，然而计算机网络中似乎并没有介绍这三者的理论与实践，因此我花了一些时间，用C写了一个简单的Socket Server与Client，学习同步/异步、阻塞/非阻塞、socket编程、select poll epoll函数的用法与区别。
+在面试中经常出现IO复用的问题，然而计算机网络中似乎并没有介绍这三者的理论与实践，因此我花了一些时间，用C写了一个简单的Socket Server与Client，学习同步/异步、阻塞/非阻塞、socket编程、select poll epoll实例的用法与区别。
 
 ## 基于TCP Protocol的Socket通信流程
 
@@ -108,7 +108,7 @@ extern int close (int __fd);
 
 
 
-关于Sync/Async, Blocking/Non-Blocking，实在有太多版本的解读，在不同语境/层次下（比如Nodejs并发和Linux I/O），他们所指的东西也不同，甚至出现混用的情况；因此，在这里我只从Linux IO模型的角度讨论Sync/Async, Blocking/Non-Blocking术语。
+关于Sync/Async, Blocking/Non-Blocking，实在有太多版本的解读，在不同语境/层次下（比如Nodejs并发和Linux I/O），他们所指的东西也不同，甚至出现混用的情况；因此，在这里我只从Linux IO模型的角度讨论Sync/Async, Blocking/Non-Blocking。
 
 ## 同步与异步
 
@@ -226,9 +226,26 @@ https://www.cs.toronto.edu/~krueger/csc209h/f05/lectures/Week11-Select.pdf
 
 
 
+## I/O Multiplexing
+
+Definition: I/O multiplexing is the capability to tell the kernel that we want to be notified if one or more I/O conditions are ready, like input is ready to be read, or descriptor is capable of taking more output. 
+
+我认为这句话的本质在“tell the kernel”，意思是让kernel去遍历这些fd并告诉我们哪些是满足条件的。因为用户本身也可以去一遍遍的system call去检查哪些fd满足条件；但是system call会触发用户态和内核态的切换，这样非常耗费时间。在IO Multiplexing中，只需要一次调用system call，就能得到全部信息。
+
+> multiplexing的本意是: **multiplexing** (sometimes contracted to **muxing**) is a method by which multiple analog or digital signals are combined into one signal over a [shared medium](https://en.wikipedia.org/wiki/Shared_medium).
+
 ### select poll epoll
 
+#### select
+
 ```c
+/*
+After select() has returned, readfds/writefds will be cleared of all file descriptors except for those that ready for reading/writing, and errorfds will be cleared of all file descriptors except for those which an exceptional condition has occurred.
+简而言之，readfds/writefds/errorfds中除了满足读/写/报错条件的fd以外的fd都被剔除了。
+
+return:
+On success, select() return the number of file descriptors contained in the three returned descriptor sets("these three returned descriptor sets"就是readfds/writefds/errorfds)
+*/
 int select(int nfds,
             fd_set *restrict readfds,
             fd_set *restrict writefds,
@@ -236,47 +253,232 @@ int select(int nfds,
             struct timeval *restrict timeout);
 ```
 
+```c
+       //Arguments 
+       readfds
+              The file descriptors in this set are watched to see if
+              they are ready for reading.  A file descriptor is ready
+              for reading if a read operation will not block; in
+              particular, a file descriptor is also ready on end-of-
+              file.
+
+              After select() has returned, readfds will be cleared of
+              all file descriptors except for those that are ready for
+              reading.
+
+       writefds
+              The file descriptors in this set are watched to see if
+              they are ready for writing.  A file descriptor is ready
+              for writing if a write operation will not block.  However,
+              even if a file descriptor indicates as writable, a large
+              write may still block.
+
+              After select() has returned, writefds will be cleared of
+              all file descriptors except for those that are ready for
+              writing.
+
+       exceptfds
+              The file descriptors in this set are watched for
+              "exceptional conditions".  For examples of some
+              exceptional conditions, see the discussion of POLLPRI in
+              poll(2).
+
+              After select() has returned, exceptfds will be cleared of
+              all file descriptors except for those for which an
+              exceptional condition has occurred.
+
+       nfds   This argument should be set to the highest-numbered file
+              descriptor in any of the three sets, plus 1.  The
+              indicated file descriptors in each set are checked, up to
+              this limit (but see BUGS).
+
+       timeout
+              The timeout argument is a timeval structure (shown below)
+              that specifies the interval that select() should block
+              waiting for a file descriptor to become ready.  The call
+              will block until either:
+
+              • a file descriptor becomes ready;
+
+              • the call is interrupted by a signal handler; or
+
+              • the timeout expires.
+
+              Note that the timeout interval will be rounded up to the
+              system clock granularity, and kernel scheduling delays
+              mean that the blocking interval may overrun by a small
+              amount.
+
+              If both fields of the timeval structure are zero, then
+              select() returns immediately.  (This is useful for
+              polling.)
+
+              If timeout is specified as NULL, select() blocks
+              indefinitely waiting for a file descriptor to become
+              ready.
+/*          
+    struct timeval {
+        time_t      tv_sec;         /* seconds */
+        suseconds_t tv_usec;        /* microseconds */
+    };
+*/
+```
+
+> More about timeout
+>
+> There are 3 situations for timeout:
+>
+> **Wait forever** (timeout is specified as a null pointer) until one of the specified descriptors is ready for I/O.
+>
+> **Wait up to a fixed amount of time** (timeout points to a timeval structure). Return when one of the specified descriptors is ready for I/O, but do not wait beyond the number of seconds and microseconds specified in the timeval structure.
+>
+> **Do not wait at all** (timeout points to a timeval structure and the timer value is 0, i.e. the number of seconds and microseconds specified by the structure are 0). Return immediately after checking the descriptors. This is called polling.
+
+Advantage:
+
+Copying readfds, writefds, errorfds to kernel space and traverse these fd_set in kernel to check if the file descriptors become "ready" for some class of I/O operation. **Only accessing kernel space for one time, all the file descriptor can be monitored.**
+
 Disadvantage: 
 
-- The biggest drawback of select is that there is a limit to the number of fd’s that can be opened by a single process, which is set by FD_SETSIZE; the default value is 1024;
+- The biggest drawback of select is that there is a <span id="limit" style="color:#F00">limit</span> to the number of fd’s that can be opened by a single process, which is set by FD_SETSIZE; the default value is 1024;
 - Each time select is called, the set of fd’s needs to be copied from user state to kernel state, which is a significant overhead when there are a lot of fd’s;
 - Each kernel needs to scan the entire fd_set linearly, so its I/O performance decreases linearly as the number of descriptor fd’s monitored grows;
-- 
+
+> see also:
+>
+> [Chapter 6. I/O Multiplexing: The select and poll Functions - Shichao's Notes](https://notes.shichao.io/unp/ch6/#select-function)
+>
+> [select(2) - Linux manual page (man7.org)](https://www.man7.org/linux/man-pages/man2/select.2.html)
 
 
+
+##### demo
+
+(to be completed
+
+#### poll
+
+poll() is almost the same as select(). Poll passes file descriptors as **arrays in the user state** and stores them as **linked list in the kernel**, the number of fds has <a href="#limit">no maximum limit</a>( this is very different from select() ).
+
+```c
+/*
+fds is a pointer pointing to arrays
+the number of items in the fds array is specified in nfds
+timeout is the same meaning as in select()
+
+return:        
+On success, poll() returns a nonnegative value which is the number of elements in the pollfds whose revents fields have been set to a nonzero value (indicating an event or an error).  A  return value of zero indicates that the system call timed out before any file descriptors became read.
+
+On error, -1 is returned, and errno is set to indicate the error.
+*/
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+
+/*
+struct pollfd {
+    int   fd;         /* file descriptor */
+    short events;     /* requested events */
+    short revents;    /* returned events */
+};
+*/
+```
+
+Disadvantage:
+
+High performance overhead because the kernel still have to traverse all the fd (almost the same overhead as select() )
+
+##### demo
+
+(to be completed)
+
+#### epoll
+
+`epoll` is a improvement for `poll()` and `select()`
+
+>Storing a collection of file descriptors using a <a href="#why_rb_tree">red-black tree</a> instead of a list
+
+`epoll` model is different from `poll` and `select` model, to use `epoll` model, there are 3 functions: `epoll_create`, `epoll_ctl`,  `epoll_wait`.
+
+##### epoll_create()
+
+to create an epoll instance, you may first use `epoll_create()`
+
+```c
+/*
+size: Since Linux 2.6.8, the size argument is ignored, but must be greater than zero.
+return 0 for create epoll successfully, -1 for failed
+*/
+int epoll_create(int size);
+```
+
+##### epoll_ctl()
+
+then using `epoll_ctl()` to add/delete/modify fd in the interesting list. `ctl` stand for control.
+
+```c
+/*
+epfd: the fd of epoll instance
+op: op stands for operation code, which is EPOLL_CTL_ADD, EPOLL_CTL_DEL, EPOLL_CTL_MOD
+fd: the file decriptor that to be added/deleted/modified in the interesting list
+
+return: When successful, epoll_ctl() returns zero.  When an error occurs, epoll_ctl() returns -1 and errno is set to indicate the error.
+*/
+int epoll_ctl(int epfd, int op, int fd, struct epoll_event* event);
+
+/*
+typedef union epoll_data {
+	void    *ptr;
+	int      fd;
+	uint32_t u32;
+	uint64_t u64;
+} epoll_data_t;
+
+struct epoll_event {
+	uint32_t     events;    /* Epoll events */
+	epoll_data_t data;      /* User data variable */
+};
+*/
+```
+
+>when to use EPOLL_CTL_MOD?
+>
+>**suppose** fd_1 is added into the interesting list by epoll_ctl, then in epoll_wait() fd_1 is found to be ready for read.
+>
+>**then** the content inside event will be cleared but our fd_1 keeps existed in the insteresting list. 
+>
+>this means if we want to further more monitor fd_1, **we have to modify fd_1's bundled event**
+>
+>**Conclusion**:
+>
+>When fd is existed in the insteresting list, the using `epoll_ctl(epfd,EPOLL_CTL_ADD, fd_1, event)` is incorrect, changeing`EPOLL_CTL_ADD` into `EPOLL_CTL_MOD` should be fine.
+
+##### epoll_wait()
+
+`epoll_wait` is similar to `select`, The epoll_wait() system call waits for events happened in fds in the interesting list.
+
+```c
+/*
+epfd: the fd of epoll instance
+events: in epoll_ctl we probably add some fd into a list known as "the interest list". The buffer pointed to by events is used to return information of the ready file descriptors in the interest list. 
+maxevents: Up to maxevents are returned by epoll_wait() and maxevents argument must be greater than zero.
+
+return: 
+On success, epoll_wait() returns the number of file descriptors ready for the requested I/O, or zero if no file descriptor became ready during the requested timeout milliseconds.  On failure,  epoll_wait() returns -1 and errno is set to indicate the error.
+*/
+int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout);
+```
+
+
+
+##### <span id="why_rb_tree">Why using RB Tree in epoll?</span>
+
+(to be completed)
+
+#### 区别
 
 `select` 和 `poll` 监听文件描述符list，进行一个线性的查找 O(n)
 
 `epoll`: 使用了内核文件级别的回调机制O(1)
 
-epoll_create函数：
-
-```
-int epoll_create(int size);
-```
-
-创建一个 epoll 对象，返回该对象的描述符，注意要使用 close 关闭该描述符。
-
-
-
-epoll_ctl函数：
-
-```
-int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
-```
-
-op: op stands for operation code, EPOLL_CTL_ADD，EPOLL_CTL_DEL，EPOLL_CTL_MOD
-
-fd: 需要添加监听的 socket 描述符
-
-event: 事件信息
-
-(to be completed)
-
-
-
-
-
 ## code demo
 
-to be upload
+(to be upload)
