@@ -108,30 +108,54 @@ extern int close (int __fd);
 
 
 
-关于Sync/Async, Blocking/Non-Blocking，实在有太多版本的解读，在不同语境/层次下（比如Nodejs并发和Linux I/O），他们所指的东西也不同，甚至出现混用的情况；因此，在这里我只从Linux IO模型的角度讨论Sync/Async, Blocking/Non-Blocking。
+关于Sync/Async, Blocking/Non-Blocking，实在有太多版本的解读，在不同语境/层次下（比如Nodejs并发和Linux I/O），他们所指的东西也不同，甚至出现混用的情况；因此，在这里我从Linux IO系统调用的角度讨论Sync/Async, Blocking/Non-Blocking。
+
+## 阻塞与非阻塞
+
+阻塞与非阻塞关注的是接口调用（发出请求）后等待数据返回时的状态。
+
+阻塞：被挂起无法执行其他操作的则是阻塞型的
+
+非阻塞：可以被立即「抽离」去完成其他「任务」的则是非阻塞型的
+
+<img src="https://pic3.zhimg.com/80/v2-6507ab3517814b1b84fbff9a3eb31842_1440w.webp" alt="img" style="zoom:67%;" />
+
+### IO Model实例
+
+以下两种IO Model都是同步的IO Model，因为他们都造成了阻塞，只是阻塞程度不同。
+
+**Blocking IO Model：**
+
+在内核中no data ready的情况下调用read函数，read函数会一直等待，直到内核中data ready，然后拷贝到用户区。这种做法的缺点显而易见，如果一直没有data的话，进程会在原地等待，无法做其他事情。
+
+这个模型中的read系统调用显然是阻塞的。
+
+<img src=".\md_image\image-20230202202516674.png" alt="image-20230202202516674" style="zoom:67%;" />
+
+
+
+**Non blocking IO Model：**
+
+每次在内核中no data ready的情况下调用read函数，都会直接返回EWOULDBLOCK，但是在内核中data ready后，就会花费一段时间，把data从内核区中拷贝到用户区。这个模型中的read系统调用显然是非阻塞
+
+<img src=".\md_image\image-20230202202440760.png" alt="image-20230202202440760" style="zoom:67%;" />
 
 ## 同步与异步
 
 同步与异步关注的是任务完成时消息通知的方式。以下对于同步和异步的定义是我的个人理解，欢迎指正。
 
-同步：调用IO后，函数返回和IO结果同时发生。
+同步：调用IO函数后，在函数返回时IO完全完成。
 
-异步：调用IO后，函数直接返回一个值，但是IO的结果会在一段时间后得到。
+> 从更大的角度来看（不是从系统调用的角度）：
+>
+> 在等待IO函数返回期间，有2种可能
 
->引用：
+>1. 假如调用IO的函数为主线程，IO在子线程；主线程在循环体中轮询子线程是否完成IO，循环体中还可以干一些别的事情。 这就是一个同步非阻塞例子
+>2. 假如调用IO的函数为主线程，IO在子线程，主线程休眠，等待IO完成再被唤醒  或  只有一个线程，IO函数完成后返回主函数继续执行。 这就是一个同步阻塞例子
+
+异步：调用IO函数后，函数直接返回一个值，但是IO会在一段时间后完成。
+
 >
->POSIX defines these two terms as follows:
->
->- A synchronous I/O operation causes the requesting process to be blocked until that I/O operation completes.
->- An asynchronous I/O operation does not cause the requesting process to be blocked.
->
->用符号表达就是：
->
->A synchronous I/O operation -> blocked
->
->An asynchronous I/O -> non blocked
->
->但是我认为POSIX的这两句话并不算definition，只是说明了同步和异步的一些properties。
 
 
 
@@ -151,66 +175,33 @@ another picture describe AIO：
 
 
 
-如上图，显然这是一个异步的IO Model，而且他也是一个non blocking model，因为调用aio_read后立刻返回。
+如上图，
+
+aio_read是一个异步的系统调用。
 
 
 
 **IO复用(IO Multiplexing): **
 
-IO复用一定是阻塞的，
+IO复用中的几个系统调用函数（select poll epoll）一定是同步的，必须等待操作系统返回值。
 
-但是关于IO复用是同步还是异步一直是一个有争议的话题，因此借用知乎一篇回答的说法：
+而调用select/poll/epoll 的封装后的框架的行为，可以是异步的，只要你暴露给外部的接口无需等待你的返回值即可。
 
->- select/poll/epoll 这个系统调用，是同步的，也就是必须等待操作系统返回值。
->- 而底层用了select/poll/epoll 的封装后的框架，可以是异步的，只要你暴露给外部的接口无需等待你的返回值即可。
->
->[IO多路复用到底是不是异步的](https://www.zhihu.com/question/59975081/answer/1932776593)
+[IO多路复用到底是不是异步的](https://www.zhihu.com/question/59975081/answer/1932776593)
+
+同时，IO复用又分为ET和LT工作模式，ET模式下读写的系统调用必须是non block；LT模式下读写的系统调用block或non block均可。
 
 
 
 <img src=".\md_image\image-20230202220714438.png" alt="image-20230202220714438" style="zoom: 67%;" />
 
-## 阻塞与非阻塞
 
-阻塞与非阻塞关注的是接口调用（发出请求）后等待数据返回时的状态。
-
-阻塞：被挂起无法执行其他操作的则是阻塞型的
-
-非阻塞：可以被立即「抽离」去完成其他「任务」的则是非阻塞型的
-
-<img src="https://pic3.zhimg.com/80/v2-6507ab3517814b1b84fbff9a3eb31842_1440w.webp" alt="img" style="zoom:67%;" />
-
-### IO Model实例
-
-以下两种IO Model都是同步的IO Model，因为他们都造成了阻塞，只是阻塞程度不同。
-
-**阻塞的IO Model：**
-
-在内核中no data ready的情况下调用read函数，read函数会一直等待，直到内核中data ready，然后拷贝到用户区。这种做法的缺点显而易见，如果一直没有data的话，进程会在原地等待，无法做其他事情。
-
-<img src=".\md_image\image-20230202202516674.png" alt="image-20230202202516674" style="zoom:67%;" />
-
-
-
-**非阻塞的IO Model：**
-
-每次在内核中no data ready的情况下调用read函数，都会直接返回EWOULDBLOCK，但是在内核中data ready后，就会花费一段时间，把data从内核区中拷贝到用户区。
-
-<img src=".\md_image\image-20230202202440760.png" alt="image-20230202202440760" style="zoom:67%;" />
 
 
 
 ## 关系
 
 “Note that synchronous/asynchronous implies blocking/not blocking but not vice versa, that is, not every blocking operation is synchronous and not every non blocking operation is asynchronous.” 
-
-同步/异步与阻塞/非阻塞之间没有必然关系，可以任意组合。另有下图供参考。
-
-
-
-
-
-![图片描述](https://segmentfault.com/img/bVbcRPz?w=386&h=225)
 
 >一点个人的建议：不要过分纠结于IO复用到底是同步还是异步，关键是理解各个IO模型是为了解决其他IO模型的什么问题而提出的。建议阅读：[IO多路复用到底是不是异步的](https://www.zhihu.com/question/59975081/answer/1932776593)
 
